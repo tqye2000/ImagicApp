@@ -10,8 +10,9 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from rembg import remove
-from PIL import Image, ImageEnhance, ImageFilter
-
+from PIL import Image, ImageEnhance, ImageFilter, ImageOps
+import cv2  # For advanced image processing
+import numpy as np  # For array operations
 import tkinter as tk
 from tkinter import colorchooser
 
@@ -72,7 +73,7 @@ class ImageMagic(toga.App):
     def create_processing_section(self):
         """Create the processing options and button"""
         # Create processing options box
-        self.proc_option_box = toga.Box(style=Pack(direction=ROW, padding=10))
+        self.proc_option_box = toga.Box(style=Pack(direction=ROW, padding=8))
         
         # Add dropdown label and list
         dropdown_label = toga.Label(
@@ -81,7 +82,7 @@ class ImageMagic(toga.App):
         )
         
         self.dropdown = toga.Selection(
-            items=['Remove Background', 'Enhance Image'],
+            items=['Remove Background', 'Enhance Image', 'Artistic Filters', 'Object Removal'],
             on_select=self.handle_option_select,
             style=Pack(flex=1)
         )
@@ -329,6 +330,43 @@ class ImageMagic(toga.App):
             self.params_box.add(brightness_row)
             self.params_box.add(sharpness_row)
             self.params_box.add(noise_row)
+        elif widget.value == "Artistic Filters":
+            # Set params_box to use column direction
+            self.params_box.style.update(direction=COLUMN)
+            
+            # # Create parameters label
+            # params_label = toga.Label(
+            #     'Filter Parameters:',
+            #     style=Pack(padding=(0, 0, 6, 0))
+            # )
+            # self.params_box.add(params_label)
+
+            # Create filter selection row
+            filter_row = toga.Box(style=Pack(direction=ROW, padding=(0, 5)))
+            filter_label = toga.Label('Filter:', style=Pack(padding=(0, 8), width=100))
+            self.filter_select = toga.Selection(
+                items=['Grayscale', 'Sepia', 'Blur', 'Emboss', 'Edge Enhance', 'Posterize', 'Negative'],
+                style=Pack(width=150)
+            )
+            filter_row.add(filter_label)
+            filter_row.add(self.filter_select)
+            
+            # Create intensity control row
+            intensity_row = toga.Box(style=Pack(direction=ROW, padding=(0, 5)))
+            intensity_label = toga.Label('Intensity:', style=Pack(padding=(0, 10), width=100))
+            self.intensity_input = toga.NumberInput(
+                min_value=0.0,
+                max_value=2.0,
+                value=1.0,
+                step=0.1,
+                style=Pack(width=70)
+            )
+            intensity_row.add(intensity_label)
+            intensity_row.add(self.intensity_input)
+            
+            # Add rows to params box
+            self.params_box.add(filter_row)
+            self.params_box.add(intensity_row)            
         else:
             pass
 
@@ -341,6 +379,8 @@ class ImageMagic(toga.App):
             await self.process_remove_background()
         elif selected_option == "Enhance Image":
             await self.process_enhance()
+        elif selected_option == "Artistic Filters":
+            await self.process_artistic_filter()
         else:
             print("Invalid option selected")
 
@@ -424,7 +464,7 @@ class ImageMagic(toga.App):
                 output_path = temp_file.name
                 img.save(output_path, format='PNG')
                 
-                    # Ensure file exists and is accessible
+            # Ensure file exists and is accessible
             if os.path.exists(output_path):
                 # Wait a brief moment to ensure file is written
                 await asyncio.sleep(0.5)
@@ -443,6 +483,80 @@ class ImageMagic(toga.App):
             import traceback
             traceback.print_exc()
 
+    async def process_artistic_filter(self):
+        """Apply artistic filter to image"""
+        try:
+            # Get original image path
+            original_image = self.original_image_box.children[0].image
+            input_path = original_image.path
+            
+            # Open the image with PIL
+            img = Image.open(input_path)
+            
+            # Get filter parameters
+            filter_type = self.filter_select.value
+            intensity = self.intensity_input.value
+            
+            # Apply selected filter
+            if filter_type == 'Grayscale':
+                img = ImageOps.grayscale(img)
+                # Convert back to RGB mode for consistent handling
+                img = img.convert('RGB')
+                
+            elif filter_type == 'Sepia':
+                # Apply sepia filter
+                width, height = img.size
+                pixels = img.load()
+                for x in range(width):
+                    for y in range(height):
+                        r, g, b = pixels[x, y]
+                        tr = int(0.393 * r + 0.769 * g + 0.189 * b)
+                        tg = int(0.349 * r + 0.686 * g + 0.168 * b)
+                        tb = int(0.272 * r + 0.534 * g + 0.131 * b)
+                        pixels[x, y] = (min(tr, 255), min(tg, 255), min(tb, 255))
+                
+            elif filter_type == 'Blur':
+                # Apply Gaussian blur
+                img = img.filter(ImageFilter.GaussianBlur(radius=intensity * 2))
+                
+            elif filter_type == 'Emboss':
+                img = img.filter(ImageFilter.EMBOSS)
+                
+            elif filter_type == 'Edge Enhance':
+                img = img.filter(ImageFilter.EDGE_ENHANCE_MORE)
+                
+            elif filter_type == 'Posterize':
+                # Convert to RGB if not already
+                img = img.convert('RGB')
+                # Posterize effect (reduce number of colors)
+                img = ImageOps.posterize(img, int(8 - (intensity * 3)))
+                
+            elif filter_type == 'Negative':
+                img = ImageOps.invert(img)
+            
+            # Save the processed image
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
+                output_path = temp_file.name
+                img.save(output_path, format='PNG')
+            
+            # Ensure file exists and is accessible
+            if os.path.exists(output_path):
+                # Wait a bit longer to ensure file is fully written
+                await asyncio.sleep(0.5)
+                
+                # Display the processed image
+                self.display_image(output_path, self.processed_image_box)
+                
+                # Store the processed image path and enable download button
+                self.processed_image_path = output_path
+                self.download_button.enabled = True
+            else:
+                raise Exception("Failed to save processed image")
+                
+        except Exception as e:
+            print(f'Error applying filter: {e}')
+            import traceback
+            traceback.print_exc()
 
 ################################################
 def main():
