@@ -9,6 +9,9 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from rembg import remove
+import tkinter as tk
+from tkinter import colorchooser
+
 import tempfile
 import asyncio
 import os
@@ -43,6 +46,12 @@ class ImageMagic(toga.App):
             'Image Magic',
             style=Pack(padding=10)
         )
+
+    def setup_window(self):
+        """Setup the main window"""
+        self.main_window = toga.MainWindow(title=self.formal_name)
+        self.main_window.content = self.main_box
+        self.main_window.show()
 
     def create_upload_section(self):
         """Create the upload button and related functionality"""
@@ -145,12 +154,6 @@ class ImageMagic(toga.App):
             import traceback
             traceback.print_exc()
 
-    def setup_window(self):
-        """Setup the main window"""
-        self.main_window = toga.MainWindow(title=self.formal_name)
-        self.main_window.content = self.main_box
-        self.main_window.show()
-
     async def handle_file_upload(self, widget):
         """Handle file upload process"""
         try:
@@ -216,9 +219,48 @@ class ImageMagic(toga.App):
         )
         container.add(image_view)
 
+    def open_color_picker(self, widget):
+        """Open a color picker dialog and store the selected color"""
+        # Initialize tkinter root
+        root = tk.Tk()
+        root.withdraw()  # Hide the root window
+
+        # Open color picker dialog
+        color_code = colorchooser.askcolor(title="Choose color")
+        if color_code[0]:
+            r, g, b = color_code[0]
+            self.selected_color = (r, g, b, 255)  # Add full opacity for alpha
+            print(f'Selected color: {self.selected_color}')
+
     def handle_option_select(self, widget):
         """Handle processing option selection"""
         print(f'Selected option: {widget.value}')
+
+        # Clear any existing widgets in the processing options box
+        if hasattr(self, 'checkbox'):
+            self.proc_option_box.remove(self.checkbox)
+        if hasattr(self, 'color_picker'):
+            self.proc_option_box.remove(self.color_picker)
+
+        if widget.value == "Remove Background":
+            # Create a checkbox for background color fill
+            self.checkbox = toga.Switch(
+                'Fill Background Color',
+                style=Pack(padding=(0, 10))
+            )
+            
+            # Create a button to open the color picker
+            self.color_button = toga.Button(
+                'Select Color',
+                on_press=self.open_color_picker,
+                style=Pack(padding=(0, 10))
+            )
+            
+            # Add the switch and color button to the processing options box
+            self.proc_option_box.add(self.checkbox)
+            self.proc_option_box.add(self.color_button)
+        else:
+            pass
 
     async def handle_processing(self, widget):
         """Handle image processing"""
@@ -239,10 +281,14 @@ class ImageMagic(toga.App):
             original_image = self.original_image_box.children[0].image
             input_path = original_image.path
             
+            # Get background color settings
+            use_bgcolor = self.checkbox.value if hasattr(self, 'checkbox') else False
+            bgcolor = self.selected_color if (hasattr(self, 'selected_color') and use_bgcolor) else None
+
             # Process image
             with open(input_path, 'rb') as input_file:
                 input_data = input_file.read()
-                output_data = remove(input_data)
+                output_data = remove(input_data, bgcolor=bgcolor if use_bgcolor else None)
             
             # Save and display processed image
             with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
