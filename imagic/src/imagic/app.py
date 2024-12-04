@@ -9,6 +9,8 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from rembg import remove
+from PIL import Image, ImageEnhance, ImageFilter
+
 import tkinter as tk
 from tkinter import colorchooser
 
@@ -37,15 +39,13 @@ class ImageMagic(toga.App):
         self.main_box.add(self.title_label)
         self.main_box.add(self.upload_button)
         self.main_box.add(self.proc_option_box)
+        self.main_box.add(self.params_box)
         self.main_box.add(self.process_button)
         self.main_box.add(self.image_box)
 
     def create_title(self):
         """Create the title section"""
-        self.title_label = toga.Label(
-            'Image Magic',
-            style=Pack(padding=10)
-        )
+        self.title_label = toga.Label('Image Magic', style=Pack(padding=10))
 
     def setup_window(self):
         """Setup the main window"""
@@ -73,11 +73,14 @@ class ImageMagic(toga.App):
         )
         
         self.dropdown = toga.Selection(
-            items=['Enhance Image', 'Remove Background'],
+            items=['Remove Background', 'Enhance Image'],
             on_select=self.handle_option_select,
             style=Pack(flex=1)
         )
         
+        # Create parameters box
+        self.params_box = toga.Box(style=Pack(direction=ROW, padding=10))
+    
         self.proc_option_box.add(dropdown_label)
         self.proc_option_box.add(self.dropdown)
         
@@ -97,24 +100,31 @@ class ImageMagic(toga.App):
         image_row = toga.Box(style=Pack(direction=ROW))
 
         # Original image section
+        original_section = toga.Box(style=Pack(direction=COLUMN, padding=10))
         original_label = toga.Label(
             'Original Image:',
             style=Pack(padding=(0, 0, 10, 0))
         )
         self.original_image_box = toga.Box(style=Pack(padding=10))
+        original_section.add(original_label)
+        original_section.add(self.original_image_box)
         
         # Processed image section
+        processed_section = toga.Box(style=Pack(direction=COLUMN, padding=10))
         processed_label = toga.Label(
             'Processed Image:',
             style=Pack(padding=(0, 0, 10, 0))
         )
         self.processed_image_box = toga.Box(style=Pack(padding=10))
+        processed_section.add(processed_label)
+        processed_section.add(self.processed_image_box)
         
-        # Add components to image row
-        image_row.add(original_label)
-        image_row.add(self.original_image_box)
-        image_row.add(processed_label)
-        image_row.add(self.processed_image_box)
+        # Add original and processed sections to the image row
+        image_row.add(original_section)
+        image_row.add(processed_section)
+        
+        # Add the image row to the main image box
+        self.image_box.add(image_row)
         
         # Create download button (initially hidden)
         self.download_button = toga.Button(
@@ -124,8 +134,7 @@ class ImageMagic(toga.App):
         )
         self.download_button.enabled = False
         
-        # Add components to main image box
-        self.image_box.add(image_row)
+        # Add download button to image box
         self.image_box.add(self.download_button)
 
     async def handle_download(self, widget):
@@ -145,7 +154,6 @@ class ImageMagic(toga.App):
             
             if save_path:
                 # Copy the processed image to the selected location
-                import shutil
                 shutil.copy2(self.processed_image_path, save_path)
                 print(f'Image saved to: {save_path}')
                 
@@ -202,7 +210,7 @@ class ImageMagic(toga.App):
         height = image.height
         
         # Calculate new dimensions maintaining aspect ratio
-        max_size = 200
+        max_size = 300
         if width > height:
             new_width = max_size
             new_height = int((height / width) * max_size)
@@ -236,11 +244,8 @@ class ImageMagic(toga.App):
         """Handle processing option selection"""
         print(f'Selected option: {widget.value}')
 
-        # Clear any existing widgets in the processing options box
-        if hasattr(self, 'checkbox'):
-            self.proc_option_box.remove(self.checkbox)
-        if hasattr(self, 'color_picker'):
-            self.proc_option_box.remove(self.color_picker)
+        # Clear existing parameters
+        self.params_box.clear()
 
         if widget.value == "Remove Background":
             # Create a checkbox for background color fill
@@ -253,12 +258,20 @@ class ImageMagic(toga.App):
             self.color_button = toga.Button(
                 'Select Color',
                 on_press=self.open_color_picker,
+                enabled=False,  # Initially disabled
                 style=Pack(padding=(0, 10))
             )
             
-            # Add the switch and color button to the processing options box
-            self.proc_option_box.add(self.checkbox)
-            self.proc_option_box.add(self.color_button)
+            # Enable/disable color button based on checkbox
+            def on_switch_change(switch):
+                self.color_button.enabled = switch.value
+            
+            self.checkbox.on_change = on_switch_change
+            
+            # Add the switch and color button to the parameters box
+            self.params_box.add(toga.Label('Parameters:', style=Pack(padding=(0, 10))))
+            self.params_box.add(self.checkbox)
+            self.params_box.add(self.color_button)
         else:
             pass
 
@@ -270,7 +283,7 @@ class ImageMagic(toga.App):
         if selected_option == "Remove Background":
             await self.process_remove_background()
         elif selected_option == "Enhance Image":
-            print("Under development")
+            await self.process_enhance()
         else:
             print("Invalid option selected")
 
@@ -295,7 +308,7 @@ class ImageMagic(toga.App):
                 temp_file.write(output_data)
                 output_path = temp_file.name
 
-                        # Wait a brief moment to ensure file is written
+            # Wait a brief moment to ensure file is written
             await asyncio.sleep(0.1)
 
             self.display_image(output_path, self.processed_image_box)
@@ -309,6 +322,62 @@ class ImageMagic(toga.App):
             # Print more detailed error information
             import traceback
             traceback.print_exc()
+
+
+    async def process_enhance(self):
+        """Process image enhancement"""
+
+        try:
+            # Get original image path
+            original_image = self.original_image_box.children[0].image
+            input_path = original_image.path
+            
+            # Open the image with PIL
+            img = Image.open(input_path)
+            
+            # Step 1: Color Enhancement
+            color_enhancer = ImageEnhance.Color(img)
+            img = color_enhancer.enhance(1.2)  # Increase color saturation by 20%
+            
+            # Step 2: Contrast Enhancement
+            contrast_enhancer = ImageEnhance.Contrast(img)
+            img = contrast_enhancer.enhance(1.1)  # Increase contrast by 10%
+            
+            # Step 3: Brightness Enhancement
+            brightness_enhancer = ImageEnhance.Brightness(img)
+            img = brightness_enhancer.enhance(1.1)  # Increase brightness by 10%
+            
+            # Step 4: Sharpness Enhancement
+            sharpness_enhancer = ImageEnhance.Sharpness(img)
+            img = sharpness_enhancer.enhance(1.3)  # Increase sharpness by 30%
+            
+            # Step 5: Noise Reduction (Optional)
+            img = img.filter(ImageFilter.SMOOTH_MORE)
+            
+            # Save the processed image to a temporary file
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
+                output_path = temp_file.name
+                img.save(output_path, format='PNG')
+                
+                    # Ensure file exists and is accessible
+            if os.path.exists(output_path):
+                # Wait a brief moment to ensure file is written
+                await asyncio.sleep(0.5)
+                
+                # Display the processed image
+                self.display_image(output_path, self.processed_image_box)
+                
+                # Store the processed image path and enable download button
+                self.processed_image_path = output_path
+                self.download_button.enabled = True
+            else:
+                raise Exception("Failed to save processed image")
+                
+        except Exception as e:
+            print(f'Error processing image: {e}')
+            import traceback
+            traceback.print_exc()
+
 
             
 def main():
