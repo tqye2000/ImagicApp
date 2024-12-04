@@ -1,10 +1,11 @@
-"""
-Magic Image Processing Tool
-
-History
-When      | Who        | What
-03/12/2024| TQ Ye      | First version
-"""
+##=============================================================================
+# Magic Image Processing Tool
+#
+# History
+# When      | Who        | What
+# ----------|------------|-------------------------
+# 03/12/2024| TQ Ye      | First version
+##=============================================================================
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
@@ -24,19 +25,26 @@ class ImageMagic(toga.App):
         """
         Construct and show the Toga application.
         """
-        self.main_box = toga.Box(style=Pack(direction=COLUMN))
+        # Create main box
+        self.main_box = toga.Box(style=Pack(direction=COLUMN, padding=8))
+        
+        # Create scroll container
+        self.scroll_container = toga.ScrollContainer(style=Pack(flex=1))
+        self.scroll_container.content = self.main_box
+        
+        # Setup components and window
         self.setup_ui_components()
         self.setup_window()
 
     def setup_ui_components(self):
         """Setup all UI components"""
-        self.create_title()
+        #self.create_title()
         self.create_upload_section()
         self.create_processing_section()
         self.create_image_display_section()
         
         # Add all components to main box
-        self.main_box.add(self.title_label)
+        #self.main_box.add(self.title_label)
         self.main_box.add(self.upload_button)
         self.main_box.add(self.proc_option_box)
         self.main_box.add(self.params_box)
@@ -50,7 +58,7 @@ class ImageMagic(toga.App):
     def setup_window(self):
         """Setup the main window"""
         self.main_window = toga.MainWindow(title=self.formal_name)
-        self.main_window.content = self.main_box
+        self.main_window.content = self.scroll_container  # Use scroll container instead of main_box
         self.main_window.show()
 
     def create_upload_section(self):
@@ -58,7 +66,7 @@ class ImageMagic(toga.App):
         self.upload_button = toga.Button(
             'Upload Image',
             on_press=self.handle_file_upload,
-            style=Pack(padding=10)
+            style=Pack(padding=8)
         )
 
     def create_processing_section(self):
@@ -69,7 +77,7 @@ class ImageMagic(toga.App):
         # Add dropdown label and list
         dropdown_label = toga.Label(
             'Choose Processing:',
-            style=Pack(padding=(0, 10, 0, 0))
+            style=Pack(padding=(0, 8, 0, 0))
         )
         
         self.dropdown = toga.Selection(
@@ -79,7 +87,7 @@ class ImageMagic(toga.App):
         )
         
         # Create parameters box
-        self.params_box = toga.Box(style=Pack(direction=ROW, padding=10))
+        self.params_box = toga.Box(style=Pack(direction=ROW, padding=6))
     
         self.proc_option_box.add(dropdown_label)
         self.proc_option_box.add(self.dropdown)
@@ -89,7 +97,7 @@ class ImageMagic(toga.App):
             'Process Image',
             on_press=self.handle_processing,
             enabled=False,
-            style=Pack(padding=10)
+            style=Pack(padding=6)
         )
 
     def create_image_display_section(self):
@@ -100,22 +108,22 @@ class ImageMagic(toga.App):
         image_row = toga.Box(style=Pack(direction=ROW))
 
         # Original image section
-        original_section = toga.Box(style=Pack(direction=COLUMN, padding=10))
+        original_section = toga.Box(style=Pack(direction=COLUMN, padding=6))
         original_label = toga.Label(
             'Original Image:',
-            style=Pack(padding=(0, 0, 10, 0))
+            style=Pack(padding=(0, 0, 4, 0))
         )
-        self.original_image_box = toga.Box(style=Pack(padding=10))
+        self.original_image_box = toga.Box(style=Pack(padding=6))
         original_section.add(original_label)
         original_section.add(self.original_image_box)
         
         # Processed image section
-        processed_section = toga.Box(style=Pack(direction=COLUMN, padding=10))
+        processed_section = toga.Box(style=Pack(direction=COLUMN, padding=6))
         processed_label = toga.Label(
             'Processed Image:',
-            style=Pack(padding=(0, 0, 10, 0))
+            style=Pack(padding=(0, 0, 4, 0))
         )
-        self.processed_image_box = toga.Box(style=Pack(padding=10))
+        self.processed_image_box = toga.Box(style=Pack(padding=6))
         processed_section.add(processed_label)
         processed_section.add(self.processed_image_box)
         
@@ -130,7 +138,7 @@ class ImageMagic(toga.App):
         self.download_button = toga.Button(
             'Save Processed Image',
             on_press=self.handle_download,
-            style=Pack(padding=10)
+            style=Pack(padding=8)
         )
         self.download_button.enabled = False
         
@@ -223,7 +231,7 @@ class ImageMagic(toga.App):
         image_view.style.update(
             width=new_width,
             height=new_height,
-            padding=5
+            padding=4
         )
         container.add(image_view)
 
@@ -251,7 +259,7 @@ class ImageMagic(toga.App):
             # Create a checkbox for background color fill
             self.checkbox = toga.Switch(
                 'Fill Background Color',
-                style=Pack(padding=(0, 10))
+                style=Pack(padding=(0, 8))
             )
             
             # Create a button to open the color picker
@@ -259,7 +267,7 @@ class ImageMagic(toga.App):
                 'Select Color',
                 on_press=self.open_color_picker,
                 enabled=False,  # Initially disabled
-                style=Pack(padding=(0, 10))
+                style=Pack(padding=(0, 8))
             )
             
             # Enable/disable color button based on checkbox
@@ -272,6 +280,55 @@ class ImageMagic(toga.App):
             self.params_box.add(toga.Label('Parameters:', style=Pack(padding=(0, 10))))
             self.params_box.add(self.checkbox)
             self.params_box.add(self.color_button)
+        elif widget.value == "Enhance Image":
+            # Set params_box to use column direction
+            self.params_box.style.update(direction=COLUMN)
+            
+            # Create parameters label
+            params_label = toga.Label(
+                'Enhancement Parameters:',
+                style=Pack(padding=(0, 0, 6, 0))
+            )
+            self.params_box.add(params_label)
+
+            # Function to create a parameter row
+            def create_param_row(label_text, default_value):
+                row = toga.Box(style=Pack(direction=ROW, padding=(0, 5)))
+                label = toga.Label(label_text, style=Pack(padding=(0, 6), width=100))
+                number_input = toga.NumberInput(
+                    min_value=0.0,
+                    max_value=2.0,
+                    value=default_value,
+                    step=0.1,
+                    style=Pack(width=70)
+                )
+                row.add(label)
+                row.add(number_input)
+                return row, number_input
+
+            # Create parameter rows
+            color_row, self.color_input = create_param_row('Color:', 1.2)
+            contrast_row, self.contrast_input = create_param_row('Contrast:', 1.1)
+            brightness_row, self.brightness_input = create_param_row('Brightness:', 1.1)
+            sharpness_row, self.sharpness_input = create_param_row('Sharpness:', 1.3)
+            
+            # Create noise reduction row
+            noise_row = toga.Box(style=Pack(direction=ROW, padding=(0, 5)))
+            noise_label = toga.Label('Noise Reduction:', style=Pack(padding=(0, 10), width=100))
+            self.noise_reduction = toga.Switch(
+                'Apply',
+                value=True,
+                style=Pack(padding=(0, 6))
+            )
+            noise_row.add(noise_label)
+            noise_row.add(self.noise_reduction)
+            
+            # Add all rows to params box
+            self.params_box.add(color_row)
+            self.params_box.add(contrast_row)
+            self.params_box.add(brightness_row)
+            self.params_box.add(sharpness_row)
+            self.params_box.add(noise_row)
         else:
             pass
 
@@ -323,10 +380,10 @@ class ImageMagic(toga.App):
             import traceback
             traceback.print_exc()
 
-
     async def process_enhance(self):
-        """Process image enhancement"""
-
+        """
+        Process image enhancement
+        """
         try:
             # Get original image path
             original_image = self.original_image_box.children[0].image
@@ -335,24 +392,32 @@ class ImageMagic(toga.App):
             # Open the image with PIL
             img = Image.open(input_path)
             
+            # Get enhancement parameters from number inputs
+            color_value = self.color_input.value
+            contrast_value = self.contrast_input.value
+            brightness_value = self.brightness_input.value
+            sharpness_value = self.sharpness_input.value
+            apply_noise_reduction = self.noise_reduction.value
+            
             # Step 1: Color Enhancement
             color_enhancer = ImageEnhance.Color(img)
-            img = color_enhancer.enhance(1.2)  # Increase color saturation by 20%
+            img = color_enhancer.enhance(color_value)
             
             # Step 2: Contrast Enhancement
             contrast_enhancer = ImageEnhance.Contrast(img)
-            img = contrast_enhancer.enhance(1.1)  # Increase contrast by 10%
+            img = contrast_enhancer.enhance(contrast_value)
             
             # Step 3: Brightness Enhancement
             brightness_enhancer = ImageEnhance.Brightness(img)
-            img = brightness_enhancer.enhance(1.1)  # Increase brightness by 10%
+            img = brightness_enhancer.enhance(brightness_value)
             
             # Step 4: Sharpness Enhancement
             sharpness_enhancer = ImageEnhance.Sharpness(img)
-            img = sharpness_enhancer.enhance(1.3)  # Increase sharpness by 30%
+            img = sharpness_enhancer.enhance(sharpness_value)
             
             # Step 5: Noise Reduction (Optional)
-            img = img.filter(ImageFilter.SMOOTH_MORE)
+            if apply_noise_reduction:
+                img = img.filter(ImageFilter.SMOOTH_MORE)
             
             # Save the processed image to a temporary file
             with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
@@ -379,6 +444,6 @@ class ImageMagic(toga.App):
             traceback.print_exc()
 
 
-            
+################################################
 def main():
     return ImageMagic()
