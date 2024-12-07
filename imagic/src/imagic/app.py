@@ -83,7 +83,8 @@ class ImageMagic(toga.App):
         )
         
         self.dropdown = toga.Selection(
-            items=['Remove Background', 'Enhance Image', 'Artistic Filters', 'Object Removal'],
+            #items=['Remove Background', 'Enhance Image', 'Artistic Filters', 'Object Removal'],
+            items=['Remove Background', 'Enhance Image', 'Artistic Filters'],
             on_select=self.handle_option_select,
             style=Pack(flex=1)
         )
@@ -237,6 +238,7 @@ class ImageMagic(toga.App):
         )
         container.add(image_view)
 
+
     def open_color_picker(self, widget):
         """Open a color picker dialog and store the selected color"""
         # Initialize tkinter root
@@ -249,6 +251,34 @@ class ImageMagic(toga.App):
             r, g, b = color_code[0]
             self.selected_color = (r, g, b, 255)  # Add full opacity for alpha
             print(f'Selected color: {self.selected_color}')
+
+    def enhance_eyes(self, img: Image) -> Image:
+        '''
+        Enhance eyes by increasing local contrast and clarity.
+        Without AI-based facial detection, we'll need to use general image processing techniques 
+        that hopefully enhance the eye regions' contrast and clarity.
+        '''
+        # Convert to LAB color space for better control
+        from skimage import color
+        import numpy as np
+        
+        # Convert PIL to numpy array
+        img_np = np.array(img)
+        
+        # Convert to LAB color space
+        lab = color.rgb2lab(img_np / 255.0)
+        
+        # Increase lightness contrast
+        L = lab[:, :, 0]
+        L = np.clip(L * 1.2, 0, 100)  # Increase contrast of lightness channel
+        lab[:, :, 0] = L
+        
+        # Convert back to RGB
+        enhanced = color.lab2rgb(lab) * 255.0
+        enhanced = np.clip(enhanced, 0, 255).astype(np.uint8)
+        
+        # Convert back to PIL Image
+        return Image.fromarray(enhanced)
 
 #----------- Using Toga's native widgets for marking objects ---------------
     async def start_marking(self, widget):
@@ -485,6 +515,7 @@ class ImageMagic(toga.App):
     def finish_marking(self, widget):
         """Finish marking and close the marking window"""
         self.marking_window.close()
+
 #-------------------------------
 
     def handle_option_select(self, widget):
@@ -525,13 +556,6 @@ class ImageMagic(toga.App):
             # Set params_box to use column direction
             self.params_box.style.update(direction=COLUMN)
             
-            # # Create parameters label
-            # params_label = toga.Label(
-            #     'Enhancement Parameters:',
-            #     style=Pack(padding=(0, 0, 6, 0))
-            # )
-            # self.params_box.add(params_label)
-
             # Function to create a parameter row
             def create_param_row(label_text, default_value):
                 row = toga.Box(style=Pack(direction=ROW, padding=(0, 5)))
@@ -553,34 +577,27 @@ class ImageMagic(toga.App):
             brightness_row, self.brightness_input = create_param_row('Brightness:', 1.1)
             sharpness_row, self.sharpness_input = create_param_row('Sharpness:', 1.3)
             
-            # Create noise reduction row
-            noise_row = toga.Box(style=Pack(direction=ROW, padding=(0, 5)))
-            noise_label = toga.Label('Noise Reduction:', style=Pack(padding=(0, 10), width=100))
-            self.noise_reduction = toga.Switch(
+            # Create portrait process row
+            portrait_row = toga.Box(style=Pack(direction=ROW, padding=(0, 5)))
+            portrait_label = toga.Label('Is Portrait?', style=Pack(padding=(0, 10), width=100))
+            self.is_portrait = toga.Switch(
                 'Apply',
-                value=True,
+                value=False,
                 style=Pack(padding=(0, 6))
             )
-            noise_row.add(noise_label)
-            noise_row.add(self.noise_reduction)
+            portrait_row.add(portrait_label)
+            portrait_row.add(self.is_portrait)
             
             # Add all rows to params box
             self.params_box.add(color_row)
             self.params_box.add(contrast_row)
             self.params_box.add(brightness_row)
             self.params_box.add(sharpness_row)
-            self.params_box.add(noise_row)
+            self.params_box.add(portrait_row)
         elif widget.value == "Artistic Filters":
             # Set params_box to use column direction
             self.params_box.style.update(direction=COLUMN)
             
-            # # Create parameters label
-            # params_label = toga.Label(
-            #     'Filter Parameters:',
-            #     style=Pack(padding=(0, 0, 6, 0))
-            # )
-            # self.params_box.add(params_label)
-
             # Create filter selection row
             filter_row = toga.Box(style=Pack(direction=ROW, padding=(0, 5)))
             filter_label = toga.Label('Filter:', style=Pack(padding=(0, 8), width=100))
@@ -665,8 +682,8 @@ class ImageMagic(toga.App):
             await self.process_enhance()
         elif selected_option == "Artistic Filters":
             await self.process_artistic_filter()
-        elif selected_option == "Object Removal":
-            await self.process_object_removal()
+        # elif selected_option == "Object Removal":
+        #     await self.process_object_removal()
         else:
             print("Invalid option selected")
 
@@ -723,28 +740,50 @@ class ImageMagic(toga.App):
             contrast_value = self.contrast_input.value
             brightness_value = self.brightness_input.value
             sharpness_value = self.sharpness_input.value
-            apply_noise_reduction = self.noise_reduction.value
+            apply_portrait = self.is_portrait.value
             
-            # Step 1: Color Enhancement
+            # Step 0: Noise Reduction (apply before enhancements)
+            img = img.filter(ImageFilter.MedianFilter(size=3))
+
+            # Step 1: Optional processes for portraits
+            if apply_portrait:
+                print("Smooth More ...")
+                # Selective smoothing
+                smooth_img = img.filter(ImageFilter.SMOOTH_MORE)
+                # Blend smoothed version with original to maintain some texture
+                img = Image.blend(img, smooth_img, 0.6)  # 60% smooth, 40% original
+
+                # Eye enhancement (if enabled)
+                print("Enhance Eyes ...")
+                # Create a copy for eye enhancement
+                eye_enhanced = self.enhance_eyes(img)
+                # Blend the eye-enhanced version with original
+                img = Image.blend(img, eye_enhanced, 0.25)
+
+            # Step 2: Color Enhancement
             color_enhancer = ImageEnhance.Color(img)
             img = color_enhancer.enhance(color_value)
-            
-            # Step 2: Contrast Enhancement
-            contrast_enhancer = ImageEnhance.Contrast(img)
-            img = contrast_enhancer.enhance(contrast_value)
             
             # Step 3: Brightness Enhancement
             brightness_enhancer = ImageEnhance.Brightness(img)
             img = brightness_enhancer.enhance(brightness_value)
             
-            # Step 4: Sharpness Enhancement
-            sharpness_enhancer = ImageEnhance.Sharpness(img)
-            img = sharpness_enhancer.enhance(sharpness_value)
+            # Step 4: Contrast Enhancement
+            contrast_enhancer = ImageEnhance.Contrast(img)
+            img = contrast_enhancer.enhance(contrast_value)
             
-            # Step 5: Noise Reduction (Optional)
-            if apply_noise_reduction:
-                img = img.filter(ImageFilter.SMOOTH_MORE)
-            
+            # Step 5: Sharpness Enhancement
+            #sharpness_enhancer = ImageEnhance.Sharpness(img)
+            #img = sharpness_enhancer.enhance(sharpness_value)
+
+            #Step 5: Smart Sharpening
+            if sharpness_value > 1.0:
+                # Use UnsharpMask for more controlled sharpening
+                img = img.filter(ImageFilter.UnsharpMask(radius=2, percent=150, threshold=3))
+                if sharpness_value > 1.5:
+                    # Additional edge enhancement for higher sharpness values
+                    img = img.filter(ImageFilter.EDGE_ENHANCE)
+
             # Save the processed image to a temporary file
             with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
                 output_path = temp_file.name
@@ -844,50 +883,50 @@ class ImageMagic(toga.App):
             import traceback
             traceback.print_exc()
 
-    async def process_object_removal(self):
-        """Process object removal using inpainting"""
-        try:
-            if not hasattr(self, 'mask') or self.mask is None:
-                print('No area marked for removal')
-                return
+    # async def process_object_removal(self):
+    #     """Process object removal using inpainting"""
+    #     try:
+    #         if not hasattr(self, 'mask') or self.mask is None:
+    #             print('No area marked for removal')
+    #             return
                 
-            # Get original image path
-            original_image = self.original_image_box.children[0].image
-            input_path = original_image.path
+    #         # Get original image path
+    #         original_image = self.original_image_box.children[0].image
+    #         input_path = original_image.path
             
-            # Read image and prepare for processing
-            img = cv2.imread(input_path)
+    #         # Read image and prepare for processing
+    #         img = cv2.imread(input_path)
             
-            # Resize mask to match original image size if needed
-            if self.mask.shape[:2] != img.shape[:2]:
-                mask_resized = cv2.resize(self.mask, (img.shape[1], img.shape[0]))
-            else:
-                mask_resized = self.mask
+    #         # Resize mask to match original image size if needed
+    #         if self.mask.shape[:2] != img.shape[:2]:
+    #             mask_resized = cv2.resize(self.mask, (img.shape[1], img.shape[0]))
+    #         else:
+    #             mask_resized = self.mask
             
-            # Get inpainting method
-            method = cv2.INPAINT_TELEA if self.method_select.value == 'Telea' else cv2.INPAINT_NS
+    #         # Get inpainting method
+    #         method = cv2.INPAINT_TELEA if self.method_select.value == 'Telea' else cv2.INPAINT_NS
             
-            # Perform inpainting
-            radius = int(self.radius_input.value)
-            result = cv2.inpaint(img, mask_resized, radius, method)
+    #         # Perform inpainting
+    #         radius = int(self.radius_input.value)
+    #         result = cv2.inpaint(img, mask_resized, radius, method)
             
-            # Save and display result
-            output_path = os.path.join(tempfile.gettempdir(), 'removed_object.png')
-            cv2.imwrite(output_path, result)
+    #         # Save and display result
+    #         output_path = os.path.join(tempfile.gettempdir(), 'removed_object.png')
+    #         cv2.imwrite(output_path, result)
             
-            if os.path.exists(output_path):
-                await asyncio.sleep(0.5)
-                self.display_image(output_path, self.processed_image_box)
-                self.processed_image_path = output_path
-                self.download_button.enabled = True
-                self.mask = None
-            else:
-                raise Exception("Failed to save processed image")
+    #         if os.path.exists(output_path):
+    #             await asyncio.sleep(0.5)
+    #             self.display_image(output_path, self.processed_image_box)
+    #             self.processed_image_path = output_path
+    #             self.download_button.enabled = True
+    #             self.mask = None
+    #         else:
+    #             raise Exception("Failed to save processed image")
                 
-        except Exception as e:
-            print(f'Error removing object: {e}')
-            import traceback
-            traceback.print_exc()
+    #     except Exception as e:
+    #         print(f'Error removing object: {e}')
+    #         import traceback
+    #         traceback.print_exc()
 
 
 ################################################
