@@ -355,12 +355,14 @@ class ImageMagic(toga.App):
                 row.add(number_input1)
                 row.add(label2)
                 row.add(number_input2)
-                return row
+                return row, number_input1, number_input2
             #-----------------------------------------
 
             # Create parameter rows
-            self.params_box.add(create_param_row('Color:', 1.2, 'Contrast:', 1.1))
-            self.params_box.add(create_param_row('Brightness:', 1.1, 'Sharpness:', 1.3))
+            row1, self.color_input, self.contrast_input = create_param_row('Color:', 1.2, 'Contrast:', 1.1)
+            row2, self.brightness_input, self.sharpness_input = create_param_row('Brightness:', 1.1, 'Sharpness:', 1.3)
+            self.params_box.add(row1)
+            self.params_box.add(row2)
             
         elif widget.value == "Artistic Filters":
             # Set params_box to use column direction
@@ -392,49 +394,6 @@ class ImageMagic(toga.App):
             # Add rows to params box
             self.params_box.add(filter_row)
             self.params_box.add(intensity_row)
-        # elif widget.value == "Object Removal":
-        #     # Set params_box to use column direction
-        #     self.params_box.style.update(direction=COLUMN)
-            
-        #     # Create instructions label
-        #     instructions = toga.Label(
-        #         'Instructions:\n1. Click "Mark Area" to start\n2. Draw over object to remove\n3. Click "Process" to remove object',
-        #         style=Pack(padding=(0, 0, 6, 0))
-        #     )
-        #     self.params_box.add(instructions)
-
-        #     # Create mark area button
-        #     self.mark_button = toga.Button(
-        #         'Mark Area',
-        #         on_press=lambda widget: asyncio.create_task(self.start_marking(widget)),
-        #         style=Pack(padding=(0, 5))
-        #     )
-        #     self.params_box.add(self.mark_button)
-
-        #     # Create radius control for marking
-        #     radius_row = toga.Box(style=Pack(direction=ROW, padding=(0, 5)))
-        #     radius_label = toga.Label('Brush Size:', style=Pack(padding=(0, 6), width=100))
-        #     self.radius_input = toga.NumberInput(
-        #         min_value=1,
-        #         max_value=50,
-        #         value=10,
-        #         step=1,
-        #         style=Pack(width=70)
-        #     )
-        #     radius_row.add(radius_label)
-        #     radius_row.add(self.radius_input)
-        #     self.params_box.add(radius_row)
-
-        #     # Create method selection
-        #     method_row = toga.Box(style=Pack(direction=ROW, padding=(0, 5)))
-        #     method_label = toga.Label('Method:', style=Pack(padding=(0, 6), width=100))
-        #     self.method_select = toga.Selection(
-        #         items=['Telea', 'NS'],
-        #         style=Pack(width=100)
-        #     )
-        #     method_row.add(method_label)
-        #     method_row.add(self.method_select)
-        #     self.params_box.add(method_row)
         else:
             pass
 
@@ -650,51 +609,6 @@ class ImageMagic(toga.App):
             print(f'Error applying filter: {e}')
             import traceback
             traceback.print_exc()
-
-    # async def process_object_removal(self):
-    #     """Process object removal using inpainting"""
-    #     try:
-    #         if not hasattr(self, 'mask') or self.mask is None:
-    #             print('No area marked for removal')
-    #             return
-                
-    #         # Get original image path
-    #         original_image = self.original_image_box.children[0].image
-    #         input_path = original_image.path
-            
-    #         # Read image and prepare for processing
-    #         img = cv2.imread(input_path)
-            
-    #         # Resize mask to match original image size if needed
-    #         if self.mask.shape[:2] != img.shape[:2]:
-    #             mask_resized = cv2.resize(self.mask, (img.shape[1], img.shape[0]))
-    #         else:
-    #             mask_resized = self.mask
-            
-    #         # Get inpainting method
-    #         method = cv2.INPAINT_TELEA if self.method_select.value == 'Telea' else cv2.INPAINT_NS
-            
-    #         # Perform inpainting
-    #         radius = int(self.radius_input.value)
-    #         result = cv2.inpaint(img, mask_resized, radius, method)
-            
-    #         # Save and display result
-    #         output_path = os.path.join(tempfile.gettempdir(), 'removed_object.png')
-    #         cv2.imwrite(output_path, result)
-            
-    #         if os.path.exists(output_path):
-    #             await asyncio.sleep(0.5)
-    #             self.display_image(output_path, self.processed_image_box)
-    #             self.processed_image_path = output_path
-    #             self.download_button.enabled = True
-    #             self.mask = None
-    #         else:
-    #             raise Exception("Failed to save processed image")
-                
-    #     except Exception as e:
-    #         print(f'Error removing object: {e}')
-    #         import traceback
-    #         traceback.print_exc()
 
 
 ################################################
