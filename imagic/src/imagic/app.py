@@ -280,242 +280,6 @@ class ImageMagic(toga.App):
         # Convert back to PIL Image
         return Image.fromarray(enhanced)
 
-#----------- Using Toga's native widgets for marking objects ---------------
-    async def start_marking(self, widget):
-        """Start the marking process"""
-        try:
-            # Get original image path
-            original_image = self.original_image_box.children[0].image
-            input_path = original_image.path
-            
-            # Create marking window using tkinter
-            self.create_marking_window_tk(input_path)
-            
-            # Return a completed future to satisfy the async requirement
-            return await asyncio.sleep(0)            
-        except Exception as e:
-            print(f'Error starting marking: {e}')
-            import traceback
-            traceback.print_exc()
-
-    def create_marking_window_tk(self, image_path):
-        """Create a marking window using tkinter"""
-        try:
-            # Create root window
-            root = tk.Tk()
-            root.title("Mark Object to Remove")
-            
-            # Create main frame to hold everything
-            main_frame = tk.Frame(root)
-            main_frame.pack(expand=True, fill=tk.BOTH, padx=10, pady=10)
-            
-            # Add instructions
-            instructions = tk.Label(
-                main_frame,
-                text="Click and drag to mark areas for removal",
-                pady=5
-            )
-            instructions.pack(side=tk.TOP)
-            
-            # Create buttons frame at the bottom
-            button_frame = tk.Frame(root)
-            button_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
-            
-            # Create buttons with some styling
-            button_style = {'padx': 20, 'pady': 5}
-                        
-            self.done_button = tk.Button(button_frame, text="Done", command=self.finish_marking)
-            self.done_button.pack(side=tk.LEFT, padx=5)
-            
-            self.clear_button = tk.Button(button_frame, text="Clear", command=self.clear_marking)
-            self.clear_button.pack(side=tk.LEFT, padx=5)
-
-            # Create canvas frame with scrollbars
-            canvas_frame = tk.Frame(main_frame)
-            canvas_frame.pack(expand=True, fill=tk.BOTH)
-            
-            # Add scrollbars
-            h_scroll = tk.Scrollbar(canvas_frame, orient=tk.HORIZONTAL)
-            v_scroll = tk.Scrollbar(canvas_frame, orient=tk.VERTICAL)
-            h_scroll.pack(side=tk.BOTTOM, fill=tk.X)
-            v_scroll.pack(side=tk.RIGHT, fill=tk.Y)
-            
-            # Load and resize image
-            image = Image.open(image_path)
-            # Resize image if needed (maintain aspect ratio)
-            max_size = 800
-            ratio = min(max_size/image.width, max_size/image.height)
-            new_size = (int(image.width * ratio), int(image.height * ratio))
-            image = image.resize(new_size)
-            
-            # Convert to tkinter PhotoImage
-            self.tk_image = ImageTk.PhotoImage(image)
-            
-            # Create canvas with scrollbar configuration
-            canvas = tk.Canvas(
-                canvas_frame,
-                width=min(new_size[0], 800),
-                height=min(new_size[1], 600),
-                xscrollcommand=h_scroll.set,
-                yscrollcommand=v_scroll.set
-            )
-            canvas.pack(side=tk.LEFT, expand=True, fill=tk.BOTH)
-            
-            # Configure scrollbars
-            h_scroll.config(command=canvas.xview)
-            v_scroll.config(command=canvas.yview)
-            
-            # Display image on canvas
-            canvas.create_image(0, 0, image=self.tk_image, anchor=tk.NW)
-            canvas.config(scrollregion=canvas.bbox(tk.ALL))
-            
-            # Create mask
-            self.mask = np.zeros((new_size[1], new_size[0]), dtype=np.uint8)
-            self.original_size = image.size
-            
-            # Drawing variables
-            self.drawing = False
-            
-            def start_drawing(event):
-                self.drawing = True
-                draw(event)
-                
-            def stop_drawing(event):
-                self.drawing = False
-                
-            def draw(event):
-                if self.drawing:
-                    # Get canvas coordinates
-                    x = canvas.canvasx(event.x)
-                    y = canvas.canvasy(event.y)
-                    r = int(self.radius_input.value)
-                    
-                    # Draw red circle on canvas
-                    canvas.create_oval(x-r, y-r, x+r, y+r, fill='red', outline='red')
-                    
-                    # Update mask
-                    cv2.circle(self.mask, (int(x), int(y)), r, 255, -1)
-            
-            def finish_marking():
-                root.destroy()
-            
-            def clear_marking():
-                # Clear canvas
-                canvas.delete("all")
-                canvas.create_image(0, 0, image=self.tk_image, anchor=tk.NW)
-                
-                # Reset mask
-                self.mask = np.zeros((new_size[1], new_size[0]), dtype=np.uint8)
-            
-            # Bind mouse events
-            canvas.bind('<Button-1>', start_drawing)
-            canvas.bind('<B1-Motion>', draw)
-            canvas.bind('<ButtonRelease-1>', stop_drawing)
-                        
-            # Configure window minimum size and initial size
-            root.minsize(400, 300)
-            window_width = min(new_size[0] + 50, 850)  # Add padding for scrollbars
-            window_height = min(new_size[1] + 150, 750)  # Add space for buttons and instructions
-            
-            # Center the window on screen
-            screen_width = root.winfo_screenwidth()
-            screen_height = root.winfo_screenheight()
-            x = (screen_width - window_width) // 2
-            y = (screen_height - window_height) // 2
-            root.geometry(f'{window_width}x{window_height}+{x}+{y}')
-            
-            # Start tkinter main loop
-            root.mainloop()
-
-        except Exception as e:
-            print(f'Error creating marking window: {e}')
-            import traceback
-            traceback.print_exc()
-
-    async def load_image_on_canvas(self, image_path):
-        """Load and display the image on the canvas"""
-        try:
-            # Load the image
-            image = Image.open(image_path)
-            
-            # Resize image if needed (maintain aspect ratio)
-            max_size = 800
-            ratio = min(max_size/image.width, max_size/image.height)
-            new_size = (int(image.width * ratio), int(image.height * ratio))
-            self.marking_image = image.resize(new_size)
-            
-            # Convert to Toga image
-            with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
-                self.marking_image.save(tmp.name)
-                
-            await asyncio.sleep(1.0)  # Wait for file to be written
-            self.canvas_image = toga.Image(tmp.name)
-            
-            # Draw image on canvas using context
-            self.canvas.context.clear()
-            self.canvas.context.drawImage(self.canvas_image, 0, 0)
-            
-            # Create mask for marked areas
-            self.mask = np.zeros(self.marking_image.size[::-1], dtype=np.uint8)
-
-        except Exception as e:
-            print(f'Error loading image to canvas: {e}')
-            import traceback
-            traceback.print_exc()
-
-    def on_canvas_press(self, widget, x, y):
-        """Handle mouse press on canvas"""
-        self.is_marking = True
-        self.marking_points.append((x, y))
-        self.draw_mark(x, y)
-
-    def on_canvas_release(self, widget, x, y):
-        """Handle mouse release on canvas"""
-        self.is_marking = False
-        self.marking_points = []
-
-    def on_canvas_drag(self, widget, x, y):
-        """Handle mouse drag on canvas"""
-        if self.is_marking:
-            self.marking_points.append((x, y))
-            self.draw_mark(x, y)
-
-    def draw_mark(self, x, y):
-        """Draw marking on canvas and update mask"""
-        try:
-            radius = int(self.radius_input.value)
-            
-            # Draw on canvas using context
-            context = self.canvas.context
-            context.fill_style = '#ff0000'  # Red color
-            context.fill_circle(x, y, radius)
-            
-            # Update mask
-            cv2.circle(self.mask, (int(x), int(y)), radius, 255, -1)
-        except Exception as e:
-            print(f'Error drawing mark: {e}')
-            import traceback
-            traceback.print_exc()
-
-    def clear_marking(self, widget):
-        """Clear all markings"""
-        try:
-            # Reset the mask
-            self.mask = np.zeros(self.marking_image.size[::-1], dtype=np.uint8)
-            
-            # Redraw the original image
-            context = self.canvas.context
-            context.clear()
-            context.drawImage(self.canvas_image, 0, 0)
-        except Exception as e:
-            print(f'Error clearing marks: {e}')
-            import traceback
-            traceback.print_exc()
-
-    def finish_marking(self, widget):
-        """Finish marking and close the marking window"""
-        self.marking_window.close()
-
 #-------------------------------
 
     def handle_option_select(self, widget):
@@ -555,45 +319,49 @@ class ImageMagic(toga.App):
         elif widget.value == "Enhance Image":
             # Set params_box to use column direction
             self.params_box.style.update(direction=COLUMN)
-            
-            # Function to create a parameter row
-            def create_param_row(label_text, default_value):
-                row = toga.Box(style=Pack(direction=ROW, padding=(0, 5)))
-                label = toga.Label(label_text, style=Pack(padding=(0, 6), width=100))
-                number_input = toga.NumberInput(
-                    min_value=0.0,
-                    max_value=2.0,
-                    value=default_value,
-                    step=0.1,
-                    style=Pack(width=70)
-                )
-                row.add(label)
-                row.add(number_input)
-                return row, number_input
 
-            # Create parameter rows
-            color_row, self.color_input = create_param_row('Color:', 1.2)
-            contrast_row, self.contrast_input = create_param_row('Contrast:', 1.1)
-            brightness_row, self.brightness_input = create_param_row('Brightness:', 1.1)
-            sharpness_row, self.sharpness_input = create_param_row('Sharpness:', 1.3)
-            
             # Create portrait process row
             portrait_row = toga.Box(style=Pack(direction=ROW, padding=(0, 5)))
-            portrait_label = toga.Label('Is Portrait?', style=Pack(padding=(0, 10), width=100))
             self.is_portrait = toga.Switch(
-                'Apply',
+                'Apply Portrait Enhancement',
                 value=False,
                 style=Pack(padding=(0, 6))
             )
-            portrait_row.add(portrait_label)
             portrait_row.add(self.is_portrait)
             
-            # Add all rows to params box
-            self.params_box.add(color_row)
-            self.params_box.add(contrast_row)
-            self.params_box.add(brightness_row)
-            self.params_box.add(sharpness_row)
             self.params_box.add(portrait_row)
+            
+            # Function to create a parameter row with two controls
+            #-----------------------------------------
+            def create_param_row(label_text1, default_value1, label_text2, default_value2):
+                row = toga.Box(style=Pack(direction=ROW, padding=(0, 5)))
+                label1 = toga.Label(label_text1, style=Pack(padding=(0, 6), width=100))
+                number_input1 = toga.NumberInput(
+                    min_value=0.0,
+                    max_value=2.0,
+                    value=default_value1,
+                    step=0.1,
+                    style=Pack(width=70)
+                )
+                label2 = toga.Label(label_text2, style=Pack(padding=(0, 6), width=100))
+                number_input2 = toga.NumberInput(
+                    min_value=0.0,
+                    max_value=2.0,
+                    value=default_value2,
+                    step=0.1,
+                    style=Pack(width=70)
+                )
+                row.add(label1)
+                row.add(number_input1)
+                row.add(label2)
+                row.add(number_input2)
+                return row
+            #-----------------------------------------
+
+            # Create parameter rows
+            self.params_box.add(create_param_row('Color:', 1.2, 'Contrast:', 1.1))
+            self.params_box.add(create_param_row('Brightness:', 1.1, 'Sharpness:', 1.3))
+            
         elif widget.value == "Artistic Filters":
             # Set params_box to use column direction
             self.params_box.style.update(direction=COLUMN)
@@ -624,49 +392,49 @@ class ImageMagic(toga.App):
             # Add rows to params box
             self.params_box.add(filter_row)
             self.params_box.add(intensity_row)
-        elif widget.value == "Object Removal":
-            # Set params_box to use column direction
-            self.params_box.style.update(direction=COLUMN)
+        # elif widget.value == "Object Removal":
+        #     # Set params_box to use column direction
+        #     self.params_box.style.update(direction=COLUMN)
             
-            # Create instructions label
-            instructions = toga.Label(
-                'Instructions:\n1. Click "Mark Area" to start\n2. Draw over object to remove\n3. Click "Process" to remove object',
-                style=Pack(padding=(0, 0, 6, 0))
-            )
-            self.params_box.add(instructions)
+        #     # Create instructions label
+        #     instructions = toga.Label(
+        #         'Instructions:\n1. Click "Mark Area" to start\n2. Draw over object to remove\n3. Click "Process" to remove object',
+        #         style=Pack(padding=(0, 0, 6, 0))
+        #     )
+        #     self.params_box.add(instructions)
 
-            # Create mark area button
-            self.mark_button = toga.Button(
-                'Mark Area',
-                on_press=lambda widget: asyncio.create_task(self.start_marking(widget)),
-                style=Pack(padding=(0, 5))
-            )
-            self.params_box.add(self.mark_button)
+        #     # Create mark area button
+        #     self.mark_button = toga.Button(
+        #         'Mark Area',
+        #         on_press=lambda widget: asyncio.create_task(self.start_marking(widget)),
+        #         style=Pack(padding=(0, 5))
+        #     )
+        #     self.params_box.add(self.mark_button)
 
-            # Create radius control for marking
-            radius_row = toga.Box(style=Pack(direction=ROW, padding=(0, 5)))
-            radius_label = toga.Label('Brush Size:', style=Pack(padding=(0, 6), width=100))
-            self.radius_input = toga.NumberInput(
-                min_value=1,
-                max_value=50,
-                value=10,
-                step=1,
-                style=Pack(width=70)
-            )
-            radius_row.add(radius_label)
-            radius_row.add(self.radius_input)
-            self.params_box.add(radius_row)
+        #     # Create radius control for marking
+        #     radius_row = toga.Box(style=Pack(direction=ROW, padding=(0, 5)))
+        #     radius_label = toga.Label('Brush Size:', style=Pack(padding=(0, 6), width=100))
+        #     self.radius_input = toga.NumberInput(
+        #         min_value=1,
+        #         max_value=50,
+        #         value=10,
+        #         step=1,
+        #         style=Pack(width=70)
+        #     )
+        #     radius_row.add(radius_label)
+        #     radius_row.add(self.radius_input)
+        #     self.params_box.add(radius_row)
 
-            # Create method selection
-            method_row = toga.Box(style=Pack(direction=ROW, padding=(0, 5)))
-            method_label = toga.Label('Method:', style=Pack(padding=(0, 6), width=100))
-            self.method_select = toga.Selection(
-                items=['Telea', 'NS'],
-                style=Pack(width=100)
-            )
-            method_row.add(method_label)
-            method_row.add(self.method_select)
-            self.params_box.add(method_row)
+        #     # Create method selection
+        #     method_row = toga.Box(style=Pack(direction=ROW, padding=(0, 5)))
+        #     method_label = toga.Label('Method:', style=Pack(padding=(0, 6), width=100))
+        #     self.method_select = toga.Selection(
+        #         items=['Telea', 'NS'],
+        #         style=Pack(width=100)
+        #     )
+        #     method_row.add(method_label)
+        #     method_row.add(self.method_select)
+        #     self.params_box.add(method_row)
         else:
             pass
 
