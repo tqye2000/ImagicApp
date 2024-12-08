@@ -10,7 +10,6 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
 from rembg import remove
-import tkinter as tk
 from PIL import Image, ImageTk, ImageEnhance, ImageFilter, ImageOps
 import cv2  # For advanced image processing
 import numpy as np  # For array operations

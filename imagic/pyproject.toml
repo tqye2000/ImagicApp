@@ -151,6 +151,8 @@ flatpak_sdk = "org.gnome.Sdk"
 [tool.briefcase.app.imagic.windows]
 requires = [
     "toga-winforms~=0.4.7",
+	"rembg~=2.0.60",
+	"onnxruntime~=1.20.1",
 ]
 
 # Mobile deployments
@@ -158,11 +160,15 @@ requires = [
 requires = [
     "toga-iOS~=0.4.7",
     "std-nslog~=1.0.3",
+	"rembg~=2.0.60",
+	"onnxruntime~=1.20.1",
 ]
 
 [tool.briefcase.app.imagic.android]
 requires = [
     "toga-android~=0.4.7",
+	"rembg~=2.0.60",
+	"onnxruntime~=1.20.1",
 ]
 
 base_theme = "Theme.MaterialComponents.Light.DarkActionBar"
