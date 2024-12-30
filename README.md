@@ -1,5 +1,5 @@
 # ImagicApp
-BeeWare implementation of Imagic (https://imagicapp.streamlit.app)
+BeeWare implementation of [Imagic](https://github.com/tqye2000/imagic) (https://imagicapp.streamlit.app)
  -- A simple tool for image enhancement and background removal.
 
 ## Examples:
